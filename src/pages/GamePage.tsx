@@ -89,7 +89,7 @@ export default function GamePage() {
       type GEx = THREE.Mesh & {_group: THREE.Group; _baseColor: number};
       const grp=(gh.mesh as GEx)._group; grp.position.set(gx,0.55,gz);
       const bc=(gh.mesh as GEx)._baseColor;
-      grp.traverse(child=>{ if((child as THREE.Mesh).isMesh){ const m=(child as THREE.Mesh).material as THREE.MeshStandardMaterial; m.color.setHex(bc); m.emissive.setHex(bc); m.emissiveIntensity=0.6; m.transparent=false; m.opacity=1; }});
+      grp.traverse(child=>{ const cm=child as THREE.Mesh; if(cm.isMesh){ const m=cm.material as THREE.MeshStandardMaterial; if(m.isMeshStandardMaterial){ m.color.setHex(bc); m.emissive.setHex(bc); m.emissiveIntensity=0.6; m.transparent=false; m.opacity=1; }}});
     });
     const [rpx2,rpz2]=cellXZ(16,10); g.pacman.position.set(rpx2,0.6,rpz2);
     g.score=0; g.lives=3; g.frightened=false; g.frightenTimer=0; g.ghostEatenCount=0; g.phase='playing';
@@ -287,7 +287,7 @@ export default function GamePage() {
             if(gh.mode==='frightened'){
               gh.mode='chase';
               const grp=(gh.mesh as GhostMeshEx)._group;
-              grp.traverse(child=>{ if((child as THREE.Mesh).isMesh){ const m=(child as THREE.Mesh).material as THREE.MeshStandardMaterial; m.color.setHex(GHOST_COLORS[i]); m.emissive.setHex(GHOST_COLORS[i]); m.emissiveIntensity=0.6; m.transparent=false; m.opacity=1; }});
+              grp.traverse(child=>{ const cm=child as THREE.Mesh; if(cm.isMesh){ const m=cm.material as THREE.MeshStandardMaterial; if(m.isMeshStandardMaterial){ m.color.setHex(GHOST_COLORS[i]); m.emissive.setHex(GHOST_COLORS[i]); m.emissiveIntensity=0.6; m.transparent=false; m.opacity=1; }}});
             }
           });
         }
@@ -303,15 +303,21 @@ export default function GamePage() {
         // боб-анимация
         grp.position.y = 0.55 + Math.sin(t*4+i)*0.09;
 
-        // визуал по режиму
+        // визуал по режиму — проверяем isMeshStandardMaterial перед setHex emissive
+        const applyStd = (child: THREE.Object3D, fn: (m: THREE.MeshStandardMaterial) => void) => {
+          const mesh = child as THREE.Mesh;
+          if (!mesh.isMesh) return;
+          const mat = mesh.material as THREE.MeshStandardMaterial;
+          if (mat && mat.isMeshStandardMaterial) fn(mat);
+        };
         if(gh.mode==='frightened'){
           const blink = g.frightenTimer < 3 && Math.sin(t*10)>0;
           const fc = blink ? 0xffffff : 0x2244ff;
-          grp.traverse(child=>{ if((child as THREE.Mesh).isMesh){ const m=(child as THREE.Mesh).material as THREE.MeshStandardMaterial; m.color.setHex(fc); m.emissive.setHex(fc); m.emissiveIntensity=0.8+Math.sin(t*6)*0.4; }});
+          grp.traverse(child=>applyStd(child, m=>{ m.color.setHex(fc); m.emissive.setHex(fc); m.emissiveIntensity=0.8+Math.sin(t*6)*0.4; }));
         } else if(gh.mode==='eaten'){
-          grp.traverse(child=>{ if((child as THREE.Mesh).isMesh){ const m=(child as THREE.Mesh).material as THREE.MeshStandardMaterial; m.transparent=true; m.opacity=0.18; }});
+          grp.traverse(child=>applyStd(child, m=>{ m.transparent=true; m.opacity=0.18; }));
         } else {
-          grp.traverse(child=>{ if((child as THREE.Mesh).isMesh){ const m=(child as THREE.Mesh).material as THREE.MeshStandardMaterial; m.color.setHex(baseColor); m.emissive.setHex(baseColor); m.emissiveIntensity=0.6; m.transparent=false; m.opacity=1; }});
+          grp.traverse(child=>applyStd(child, m=>{ m.color.setHex(baseColor); m.emissive.setHex(baseColor); m.emissiveIntensity=0.6; m.transparent=false; m.opacity=1; }));
         }
 
         // пересчитываем направление только при смене клетки
@@ -370,7 +376,7 @@ export default function GamePage() {
           const grp2=(gh.mesh as GhostMeshEx)._group; grp2.position.set(gx2,0.55,gz2);
           gh.row=9;gh.col=9+i;gh.dir=([[0,1],[0,-1],[1,0],[-1,0]][i]) as [number,number];gh.mode='scatter';
           const bc=(gh.mesh as GhostMeshEx)._baseColor;
-          grp2.traverse(child=>{ if((child as THREE.Mesh).isMesh){ const m=(child as THREE.Mesh).material as THREE.MeshStandardMaterial; m.color.setHex(bc); m.emissive.setHex(bc); m.emissiveIntensity=0.6; m.transparent=false; m.opacity=1; }});
+          grp2.traverse(child=>{ const cm=child as THREE.Mesh; if(cm.isMesh){ const m=cm.material as THREE.MeshStandardMaterial; if(m.isMeshStandardMaterial){ m.color.setHex(bc); m.emissive.setHex(bc); m.emissiveIntensity=0.6; m.transparent=false; m.opacity=1; }}});
         });
         g.frightened=false;g.frightenTimer=0;updateHUD();
       }
