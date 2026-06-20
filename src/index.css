@@ -4,35 +4,35 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    --background: 30 20% 6%;
+    --foreground: 40 45% 88%;
 
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card: 30 22% 9%;
+    --card-foreground: 40 45% 88%;
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    --popover: 30 22% 9%;
+    --popover-foreground: 40 45% 88%;
 
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
+    --primary: 42 65% 52%;
+    --primary-foreground: 30 30% 8%;
 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 30 18% 14%;
+    --secondary-foreground: 42 60% 70%;
 
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    --muted: 30 15% 16%;
+    --muted-foreground: 40 20% 60%;
 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    --accent: 42 70% 55%;
+    --accent-foreground: 30 30% 8%;
 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive: 0 62% 45%;
+    --destructive-foreground: 40 45% 95%;
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    --border: 38 25% 22%;
+    --input: 38 25% 22%;
+    --ring: 42 65% 52%;
 
-    --radius: 0.5rem;
+    --radius: 0.25rem;
 
     --sidebar-background: 0 0% 98%;
 
@@ -97,5 +97,63 @@
 
   body {
     @apply bg-background text-foreground;
+    font-family: "Cormorant", serif;
   }
+}
+
+@layer utilities {
+  .font-display {
+    font-family: "Oswald", sans-serif;
+  }
+  .text-gold-gradient {
+    background: linear-gradient(
+      135deg,
+      #f7e2a0 0%,
+      #d4a93a 40%,
+      #9c6b1e 70%,
+      #f3d27a 100%
+    );
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .gold-border {
+    border-image: linear-gradient(135deg, #d4a93a, #9c6b1e, #f3d27a) 1;
+  }
+  .ornament-bg {
+    background-image: radial-gradient(
+      circle at 50% 0%,
+      hsl(42 65% 52% / 0.12),
+      transparent 60%
+    );
+  }
+  .glow-gold {
+    box-shadow: 0 0 40px -8px hsl(42 65% 52% / 0.35);
+  }
+}
+
+@keyframes float-up {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes shimmer {
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+.animate-float-up {
+  animation: float-up 0.9s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.animate-shimmer {
+  animation: shimmer 3s ease-in-out infinite;
 }
