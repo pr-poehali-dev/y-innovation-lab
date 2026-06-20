@@ -178,7 +178,15 @@ export default function GamePage() {
       if(pelletMeshes.has(dk)){
         scene.remove(pelletMeshes.get(dk)!);pelletMeshes.delete(dk);g.score+=50;
         g.frightened=true;g.frightenTimer=10;g.ghostEatenCount=0;
-        ghosts.forEach(gh=>{if(gh.mode!=='eaten'){gh.mode='frightened';const mat=gh.mesh.material as THREE.MeshStandardMaterial;mat.color.setHex(0x2222ff);mat.emissive.setHex(0x0000ff);}});
+        ghosts.forEach(gh=>{
+          if(gh.mode!=='eaten'){
+            gh.mode='frightened';
+            const mat=gh.mesh.material as THREE.MeshStandardMaterial;
+            mat.color.setHex(0x0044ff);
+            mat.emissive.setHex(0x0022ff);
+            mat.emissiveIntensity=1.5;
+          }
+        });
         updateHUD();
       }
 
@@ -192,34 +200,64 @@ export default function GamePage() {
       const corners:[number,number][]= [[1,1],[1,19],[20,1],[20,19]];
       ghosts.forEach((gh,i)=>{
         gh.mesh.position.y=0.45+Math.sin(t*3+i)*0.07;
+        // пульсация в режиме страха
+        if(gh.mode==='frightened'){
+          const mat=gh.mesh.material as THREE.MeshStandardMaterial;
+          const pulse=0.5+Math.abs(Math.sin(t*6))*1.5;
+          mat.emissiveIntensity=pulse;
+          // мигание белым когда осталось мало времени
+          if(g.frightenTimer<3){
+            mat.color.setHex(Math.sin(t*12)>0?0x0044ff:0xffffff);
+          }
+        }
+        // пересчитываем направление только при смене клетки
+        const [curR,curC]=xzToCell(gh.mesh.position.x,gh.mesh.position.z);
+        const cellChanged = curR!==gh.row || curC!==gh.col;
+        gh.row=curR; gh.col=curC;
         const back:[number,number]=[-gh.dir[0],-gh.dir[1]];
-        if(gh.mode==='eaten'){
-          const nb=getNeighbors(gh.row,gh.col,back);
-          if(nb.length){let best=nb[0],bd=Infinity;for(const n of nb){const d=Math.abs(gh.row+n[0]-9)+Math.abs(gh.col+n[1]-10);if(d<bd){bd=d;best=n;}}gh.dir=best;}
-          if(gh.row===9&&(gh.col===9||gh.col===10)){gh.mode='chase';const mat=gh.mesh.material as THREE.MeshStandardMaterial;mat.color.setHex(GHOST_COLORS[i]);mat.emissive.setHex(GHOST_COLORS[i]);mat.transparent=false;mat.opacity=1;}
-        } else if(gh.mode==='frightened'){
-          const nb=getNeighbors(gh.row,gh.col,back);
-          if(nb.length) gh.dir=nb[Math.floor(Math.random()*nb.length)];
-        } else {
-          const tgt=gh.mode==='scatter'?corners[i]:[sr+(i===1?gh.dir[0]*4:0),sc+(i===1?gh.dir[1]*4:0)];
-          const nb=getNeighbors(gh.row,gh.col,back);
-          if(nb.length){let best=nb[0],bd=Infinity;for(const n of nb){const d=Math.abs(gh.row+n[0]-tgt[0])+Math.abs(gh.col+n[1]-tgt[1]);if(d<bd){bd=d;best=n;}}gh.dir=best;}
+        if(cellChanged){
+          if(gh.mode==='eaten'){
+            const nb=getNeighbors(gh.row,gh.col,back);
+            if(nb.length){let best=nb[0],bd=Infinity;for(const n of nb){const d=Math.abs(gh.row+n[0]-9)+Math.abs(gh.col+n[1]-10);if(d<bd){bd=d;best=n;}}gh.dir=best;}
+            if(gh.row===9&&(gh.col>=9&&gh.col<=10)){gh.mode='chase';const mat=gh.mesh.material as THREE.MeshStandardMaterial;mat.color.setHex(GHOST_COLORS[i]);mat.emissive.setHex(GHOST_COLORS[i]);mat.emissiveIntensity=0.2;mat.transparent=false;mat.opacity=1;}
+          } else if(gh.mode==='frightened'){
+            // убегает от Пакмана — выбирает направление подальше
+            const nb=getNeighbors(gh.row,gh.col,back);
+            if(nb.length){
+              let best=nb[0],bd=-1;
+              for(const n of nb){const d=Math.abs(gh.row+n[0]-sr)+Math.abs(gh.col+n[1]-sc);if(d>bd){bd=d;best=n;}}
+              gh.dir=best;
+            }
+          } else {
+            const tgt=gh.mode==='scatter'?corners[i]:[sr+(i===1?gh.dir[0]*4:0),sc+(i===1?gh.dir[1]*4:0)];
+            const nb=getNeighbors(gh.row,gh.col,back);
+            if(nb.length){let best=nb[0],bd=Infinity;for(const n of nb){const d=Math.abs(gh.row+n[0]-tgt[0])+Math.abs(gh.col+n[1]-tgt[1]);if(d<bd){bd=d;best=n;}}gh.dir=best;}
+          }
         }
         let gx=gh.mesh.position.x+gh.dir[1]*GSPEED*delta,gz=gh.mesh.position.z+gh.dir[0]*GSPEED*delta;
         const [gr,gc]=xzToCell(gx,gz);
-        if(isWall(gr,gh.col)) gz=gh.mesh.position.z;
-        if(isWall(gh.row,gc)) gx=gh.mesh.position.x;
+        if(isWall(gr,gh.col)) { gz=gh.mesh.position.z; gh.dir=[gh.dir[0]===0?[-1,1][Math.floor(Math.random()*2)]:0, 0] as [number,number]; }
+        if(isWall(gh.row,gc)) { gx=gh.mesh.position.x; gh.dir=[0, gh.dir[1]===0?[-1,1][Math.floor(Math.random()*2)]:0] as [number,number]; }
         gh.mesh.position.x=gx;gh.mesh.position.z=gz;
-        const [gr2,gc2]=xzToCell(gx,gz);gh.row=gr2;gh.col=gc2;
       });
 
-      // Collision
+      // Collision — euclidean distance for reliable ghost eating
       let died=false;
       ghosts.forEach((gh,i)=>{
         if(gh.mode==='eaten') return;
-        if(Math.abs(gh.mesh.position.x-nx)<CELL*0.75&&Math.abs(gh.mesh.position.z-nz)<CELL*0.75){
-          if(gh.mode==='frightened'){g.score+=[200,400,800,1600][Math.min(g.ghostEatenCount,3)];g.ghostEatenCount++;gh.mode='eaten';const mat=gh.mesh.material as THREE.MeshStandardMaterial;mat.transparent=true;mat.opacity=0.25;updateHUD();}
-          else if(!died){died=true;}
+        const dx=gh.mesh.position.x-nx, dz=gh.mesh.position.z-nz;
+        const dist=Math.sqrt(dx*dx+dz*dz);
+        if(dist < CELL*1.0){
+          if(g.frightened && gh.mode==='frightened'){
+            g.score+=[200,400,800,1600][Math.min(g.ghostEatenCount,3)];
+            g.ghostEatenCount++;
+            gh.mode='eaten';
+            const mat=gh.mesh.material as THREE.MeshStandardMaterial;
+            mat.transparent=true; mat.opacity=0.25;
+            updateHUD();
+          } else if(gh.mode!=='frightened'&&!died){
+            died=true;
+          }
         }
       });
 
