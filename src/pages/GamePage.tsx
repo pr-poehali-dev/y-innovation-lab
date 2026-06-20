@@ -82,7 +82,16 @@ export default function GamePage() {
       }
     }
     const [px,pz] = cellXZ(16,10); g.pacman.position.set(px,0.45,pz); g.pacRow=16; g.pacCol=10; g.pacDir=[0,0]; g.nextDir=[0,0];
-    g.ghosts.forEach((gh,i) => { const [gx,gz]=cellXZ(9,9+i); gh.mesh.position.set(gx,0.45,gz); gh.row=9; gh.col=9+i; gh.dir=[[0,1],[0,-1],[1,0],[-1,0]][i] as [number,number]; gh.mode='scatter'; gh.frightTimer=0; const mat=gh.mesh.material as THREE.MeshStandardMaterial; mat.color.setHex(GHOST_COLORS[i]); mat.emissive.setHex(GHOST_COLORS[i]); mat.transparent=false; mat.opacity=1; });
+    g.ghosts.forEach((gh,i) => {
+      const [gx,gz]=cellXZ(9,9+i);
+      gh.mesh.position.set(gx,0.55,gz); gh.row=9; gh.col=9+i;
+      gh.dir=[[0,1],[0,-1],[1,0],[-1,0]][i] as [number,number]; gh.mode='scatter'; gh.frightTimer=0;
+      type GEx = THREE.Mesh & {_group: THREE.Group; _baseColor: number};
+      const grp=(gh.mesh as GEx)._group; grp.position.set(gx,0.55,gz);
+      const bc=(gh.mesh as GEx)._baseColor;
+      grp.traverse(child=>{ if((child as THREE.Mesh).isMesh){ const m=(child as THREE.Mesh).material as THREE.MeshStandardMaterial; m.color.setHex(bc); m.emissive.setHex(bc); m.emissiveIntensity=0.6; m.transparent=false; m.opacity=1; }});
+    });
+    const [rpx2,rpz2]=cellXZ(16,10); g.pacman.position.set(rpx2,0.6,rpz2);
     g.score=0; g.lives=3; g.frightened=false; g.frightenTimer=0; g.ghostEatenCount=0; g.phase='playing';
     const o = document.getElementById('game-overlay'); if (o) o.style.display='none';
     updateHUD();
@@ -120,13 +129,84 @@ export default function GamePage() {
       if (MAZE[r][c]===3) { const m=new THREE.Mesh(new THREE.SphereGeometry(0.32,12,12),new THREE.MeshStandardMaterial({color:0xffffff,emissive:0xff8800,emissiveIntensity:2})); m.position.set(x,0.3,z); scene.add(m); pelletMeshes.set(`${r},${c}`,m); }
     }
 
+    // --- Pacman: сфера с вырезом (рот) через две половины ---
+    function makePacman(): THREE.Group {
+      const group = new THREE.Group();
+      const mat = new THREE.MeshStandardMaterial({color:0xFFE000,emissive:0xffaa00,emissiveIntensity:0.7,roughness:0.15,metalness:0.05});
+      // верхняя половина
+      const top = new THREE.Mesh(new THREE.SphereGeometry(0.62,32,16,0,Math.PI*2,0,Math.PI*0.45), mat);
+      top.rotation.x = Math.PI * 0.05;
+      group.add(top);
+      // нижняя половина
+      const bot = new THREE.Mesh(new THREE.SphereGeometry(0.62,32,16,0,Math.PI*2,Math.PI*0.55,Math.PI*0.45), mat);
+      bot.rotation.x = -Math.PI * 0.05;
+      group.add(bot);
+      // глаз
+      const eyeMat = new THREE.MeshStandardMaterial({color:0x111111,roughness:0.8});
+      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.08,8,8), eyeMat);
+      eye.position.set(0.25, 0.42, -0.45);
+      group.add(eye);
+      return group;
+    }
+
+    // --- Ghost: купол + юбка с зубцами ---
+    function makeGhost(color: number): THREE.Group {
+      const group = new THREE.Group();
+      const mat = new THREE.MeshStandardMaterial({color, emissive:color, emissiveIntensity:0.6, roughness:0.2});
+      // тело — верхний купол
+      const dome = new THREE.Mesh(new THREE.SphereGeometry(0.58,24,12,0,Math.PI*2,0,Math.PI*0.6), mat);
+      dome.position.y = 0.18;
+      group.add(dome);
+      // цилиндр-тело
+      const body = new THREE.Mesh(new THREE.CylinderGeometry(0.58,0.58,0.38,24), mat);
+      body.position.y = -0.06;
+      group.add(body);
+      // зубцы снизу (3 штуки)
+      for(let z=0;z<3;z++){
+        const tooth = new THREE.Mesh(new THREE.CylinderGeometry(0,0.19,0.28,6), mat);
+        const angle = (z/3)*Math.PI*2 + Math.PI/6;
+        tooth.position.set(Math.sin(angle)*0.28, -0.3, Math.cos(angle)*0.28);
+        group.add(tooth);
+      }
+      // глаза
+      const eyeWhiteMat = new THREE.MeshStandardMaterial({color:0xffffff, emissive:0xffffff, emissiveIntensity:0.5});
+      const eyePupilMat = new THREE.MeshStandardMaterial({color:0x2244ff, emissive:0x0022ff, emissiveIntensity:1.5});
+      [-0.22, 0.22].forEach(xOff => {
+        const white = new THREE.Mesh(new THREE.SphereGeometry(0.14,8,8), eyeWhiteMat);
+        white.position.set(xOff, 0.2, -0.48);
+        group.add(white);
+        const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.08,6,6), eyePupilMat);
+        pupil.position.set(xOff-0.04, 0.18, -0.58);
+        group.add(pupil);
+      });
+      return group;
+    }
+
     const [px0,pz0]=cellXZ(16,10);
-    const pacman = new THREE.Mesh(new THREE.SphereGeometry(0.45,16,16), new THREE.MeshStandardMaterial({color:0xFFD700,emissive:0xff8800,emissiveIntensity:0.4,roughness:0.2}));
-    pacman.position.set(px0,0.45,pz0); pacman.castShadow=true; scene.add(pacman);
+    const pacmanGroup = makePacman();
+    pacmanGroup.position.set(px0, 0.6, pz0);
+    scene.add(pacmanGroup);
+    // для совместимости с остальным кодом используем невидимый mesh как anchor
+    const pacman = new THREE.Mesh(new THREE.SphereGeometry(0.01), new THREE.MeshBasicMaterial({visible:false}));
+    pacman.position.set(px0, 0.6, pz0);
+    scene.add(pacman);
+
+    // свечение Пакмана — дополнительный большой glow-шар
+    const pacGlowMat = new THREE.MeshBasicMaterial({color:0xffcc00,transparent:true,opacity:0.08});
+    const pacGlow = new THREE.Mesh(new THREE.SphereGeometry(1.1,16,16), pacGlowMat);
+    pacmanGroup.add(pacGlow);
 
     const ghosts: Ghost[] = GHOST_COLORS.map((color,i) => {
-      const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.4,12,12), new THREE.MeshStandardMaterial({color,emissive:color,emissiveIntensity:0.2,roughness:0.3}));
-      const [gx,gz]=cellXZ(9,9+i); mesh.position.set(gx,0.45,gz); mesh.castShadow=true; scene.add(mesh);
+      const ghostGroup = makeGhost(color);
+      const [gx,gz]=cellXZ(9,9+i);
+      ghostGroup.position.set(gx, 0.55, gz);
+      scene.add(ghostGroup);
+      // невидимый mesh-якорь
+      const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.01), new THREE.MeshBasicMaterial({visible:false}));
+      mesh.position.set(gx, 0.55, gz);
+      (mesh as THREE.Mesh & {_group: THREE.Group; _baseColor: number})._group = ghostGroup;
+      (mesh as THREE.Mesh & {_group: THREE.Group; _baseColor: number})._baseColor = color;
+      scene.add(mesh);
       return { mesh, row:9, col:9+i, dir:([[0,1],[0,-1],[1,0],[-1,0]][i]) as [number,number], mode:'scatter', frightTimer:0 };
     });
 
@@ -168,7 +248,14 @@ export default function GamePage() {
       if(isWall(nr2,g.pacCol)) nz=pacman.position.z;
       if(isWall(g.pacRow,nc2)) nx=pacman.position.x;
       pacman.position.x=nx; pacman.position.z=nz;
-      pacman.rotation.y=Math.atan2(dc,dr); pacman.scale.y=1+Math.sin(t*14)*0.07;
+      // синхронизируем группу Пакмана
+      pacmanGroup.position.x=nx; pacmanGroup.position.z=nz;
+      // поворот в сторону движения
+      if(dc!==0||dr!==0) pacmanGroup.rotation.y=Math.atan2(-dc,dr)+Math.PI/2;
+      // анимация рта — открываем/закрываем через rotation верхней и нижней половины
+      const mouthAngle = Math.abs(Math.sin(t*9))*0.55;
+      if(pacmanGroup.children[0]) pacmanGroup.children[0].rotation.x = mouthAngle;
+      if(pacmanGroup.children[1]) pacmanGroup.children[1].rotation.x = -mouthAngle;
       const [sr,sc]=xzToCell(nx,nz); g.pacRow=sr; g.pacCol=sc;
       pacLight.position.set(nx,3,nz);
 
@@ -190,26 +277,43 @@ export default function GamePage() {
         updateHUD();
       }
 
+      type GhostMeshEx = THREE.Mesh & {_group: THREE.Group; _baseColor: number};
+
       if(g.frightened){
         g.frightenTimer-=delta;
-        if(g.frightenTimer<=0){g.frightened=false;g.frightenTimer=0;ghosts.forEach((gh,i)=>{if(gh.mode==='frightened'){gh.mode='chase';const mat=gh.mesh.material as THREE.MeshStandardMaterial;mat.color.setHex(GHOST_COLORS[i]);mat.emissive.setHex(GHOST_COLORS[i]);}});}
+        if(g.frightenTimer<=0){
+          g.frightened=false; g.frightenTimer=0;
+          ghosts.forEach((gh,i)=>{
+            if(gh.mode==='frightened'){
+              gh.mode='chase';
+              const grp=(gh.mesh as GhostMeshEx)._group;
+              grp.traverse(child=>{ if((child as THREE.Mesh).isMesh){ const m=(child as THREE.Mesh).material as THREE.MeshStandardMaterial; m.color.setHex(GHOST_COLORS[i]); m.emissive.setHex(GHOST_COLORS[i]); m.emissiveIntensity=0.6; m.transparent=false; m.opacity=1; }});
+            }
+          });
+        }
         updateHUD();
       }
 
       // Ghosts
       const corners:[number,number][]= [[1,1],[1,19],[20,1],[20,19]];
       ghosts.forEach((gh,i)=>{
-        gh.mesh.position.y=0.45+Math.sin(t*3+i)*0.07;
-        // пульсация в режиме страха
+        const grp = (gh.mesh as GhostMeshEx)._group;
+        const baseColor = (gh.mesh as GhostMeshEx)._baseColor;
+
+        // боб-анимация
+        grp.position.y = 0.55 + Math.sin(t*4+i)*0.09;
+
+        // визуал по режиму
         if(gh.mode==='frightened'){
-          const mat=gh.mesh.material as THREE.MeshStandardMaterial;
-          const pulse=0.5+Math.abs(Math.sin(t*6))*1.5;
-          mat.emissiveIntensity=pulse;
-          // мигание белым когда осталось мало времени
-          if(g.frightenTimer<3){
-            mat.color.setHex(Math.sin(t*12)>0?0x0044ff:0xffffff);
-          }
+          const blink = g.frightenTimer < 3 && Math.sin(t*10)>0;
+          const fc = blink ? 0xffffff : 0x2244ff;
+          grp.traverse(child=>{ if((child as THREE.Mesh).isMesh){ const m=(child as THREE.Mesh).material as THREE.MeshStandardMaterial; m.color.setHex(fc); m.emissive.setHex(fc); m.emissiveIntensity=0.8+Math.sin(t*6)*0.4; }});
+        } else if(gh.mode==='eaten'){
+          grp.traverse(child=>{ if((child as THREE.Mesh).isMesh){ const m=(child as THREE.Mesh).material as THREE.MeshStandardMaterial; m.transparent=true; m.opacity=0.18; }});
+        } else {
+          grp.traverse(child=>{ if((child as THREE.Mesh).isMesh){ const m=(child as THREE.Mesh).material as THREE.MeshStandardMaterial; m.color.setHex(baseColor); m.emissive.setHex(baseColor); m.emissiveIntensity=0.6; m.transparent=false; m.opacity=1; }});
         }
+
         // пересчитываем направление только при смене клетки
         const [curR,curC]=xzToCell(gh.mesh.position.x,gh.mesh.position.z);
         const cellChanged = curR!==gh.row || curC!==gh.col;
@@ -219,15 +323,10 @@ export default function GamePage() {
           if(gh.mode==='eaten'){
             const nb=getNeighbors(gh.row,gh.col,back);
             if(nb.length){let best=nb[0],bd=Infinity;for(const n of nb){const d=Math.abs(gh.row+n[0]-9)+Math.abs(gh.col+n[1]-10);if(d<bd){bd=d;best=n;}}gh.dir=best;}
-            if(gh.row===9&&(gh.col>=9&&gh.col<=10)){gh.mode='chase';const mat=gh.mesh.material as THREE.MeshStandardMaterial;mat.color.setHex(GHOST_COLORS[i]);mat.emissive.setHex(GHOST_COLORS[i]);mat.emissiveIntensity=0.2;mat.transparent=false;mat.opacity=1;}
+            if(gh.row===9&&gh.col>=9&&gh.col<=10){ gh.mode='chase'; }
           } else if(gh.mode==='frightened'){
-            // убегает от Пакмана — выбирает направление подальше
             const nb=getNeighbors(gh.row,gh.col,back);
-            if(nb.length){
-              let best=nb[0],bd=-1;
-              for(const n of nb){const d=Math.abs(gh.row+n[0]-sr)+Math.abs(gh.col+n[1]-sc);if(d>bd){bd=d;best=n;}}
-              gh.dir=best;
-            }
+            if(nb.length){let best=nb[0],bd=-1;for(const n of nb){const d=Math.abs(gh.row+n[0]-sr)+Math.abs(gh.col+n[1]-sc);if(d>bd){bd=d;best=n;}}gh.dir=best;}
           } else {
             const tgt=gh.mode==='scatter'?corners[i]:[sr+(i===1?gh.dir[0]*4:0),sc+(i===1?gh.dir[1]*4:0)];
             const nb=getNeighbors(gh.row,gh.col,back);
@@ -236,36 +335,43 @@ export default function GamePage() {
         }
         let gx=gh.mesh.position.x+gh.dir[1]*GSPEED*delta,gz=gh.mesh.position.z+gh.dir[0]*GSPEED*delta;
         const [gr,gc]=xzToCell(gx,gz);
-        if(isWall(gr,gh.col)) { gz=gh.mesh.position.z; gh.dir=[gh.dir[0]===0?[-1,1][Math.floor(Math.random()*2)]:0, 0] as [number,number]; }
-        if(isWall(gh.row,gc)) { gx=gh.mesh.position.x; gh.dir=[0, gh.dir[1]===0?[-1,1][Math.floor(Math.random()*2)]:0] as [number,number]; }
-        gh.mesh.position.x=gx;gh.mesh.position.z=gz;
+        if(isWall(gr,gh.col)){ gz=gh.mesh.position.z; gh.dir=[gh.dir[0]===0?(Math.random()>0.5?-1:1):0,0] as [number,number]; }
+        if(isWall(gh.row,gc)){ gx=gh.mesh.position.x; gh.dir=[0,gh.dir[1]===0?(Math.random()>0.5?-1:1):0] as [number,number]; }
+        gh.mesh.position.x=gx; gh.mesh.position.z=gz;
+        // синхронизируем группу с якорем
+        grp.position.x=gx; grp.position.z=gz;
+        // поворот призрака по направлению
+        if(gh.dir[0]!==0||gh.dir[1]!==0) grp.rotation.y=Math.atan2(-gh.dir[1],gh.dir[0])+Math.PI/2;
       });
 
-      // Collision — euclidean distance for reliable ghost eating
+      // Collision
       let died=false;
       ghosts.forEach((gh,i)=>{
         if(gh.mode==='eaten') return;
         const dx=gh.mesh.position.x-nx, dz=gh.mesh.position.z-nz;
         const dist=Math.sqrt(dx*dx+dz*dz);
-        if(dist < CELL*1.0){
+        if(dist < CELL*0.9){
           if(g.frightened && gh.mode==='frightened'){
             g.score+=[200,400,800,1600][Math.min(g.ghostEatenCount,3)];
-            g.ghostEatenCount++;
-            gh.mode='eaten';
-            const mat=gh.mesh.material as THREE.MeshStandardMaterial;
-            mat.transparent=true; mat.opacity=0.25;
-            updateHUD();
-          } else if(gh.mode!=='frightened'&&!died){
-            died=true;
-          }
+            g.ghostEatenCount++; gh.mode='eaten'; updateHUD();
+          } else if(gh.mode!=='frightened'&&!died){ died=true; }
         }
       });
 
       if(died){
         g.lives--;
         if(g.lives<=0){g.phase='dead';showOverlay('GAME OVER',g.score,'Играть снова');updateHUD();return;}
-        const [rpx,rpz]=cellXZ(16,10);pacman.position.set(rpx,0.45,rpz);g.pacRow=16;g.pacCol=10;g.pacDir=[0,0];g.nextDir=[0,0];
-        ghosts.forEach((gh,i)=>{const[gx2,gz2]=cellXZ(9,9+i);gh.mesh.position.set(gx2,0.45,gz2);gh.row=9;gh.col=9+i;gh.dir=([[0,1],[0,-1],[1,0],[-1,0]][i]) as [number,number];gh.mode='scatter';const mat=gh.mesh.material as THREE.MeshStandardMaterial;mat.color.setHex(GHOST_COLORS[i]);mat.emissive.setHex(GHOST_COLORS[i]);mat.transparent=false;mat.opacity=1;});
+        const [rpx,rpz]=cellXZ(16,10);
+        pacman.position.set(rpx,0.6,rpz); pacmanGroup.position.set(rpx,0.6,rpz);
+        g.pacRow=16;g.pacCol=10;g.pacDir=[0,0];g.nextDir=[0,0];
+        ghosts.forEach((gh,i)=>{
+          const [gx2,gz2]=cellXZ(9,9+i);
+          gh.mesh.position.set(gx2,0.55,gz2);
+          const grp2=(gh.mesh as GhostMeshEx)._group; grp2.position.set(gx2,0.55,gz2);
+          gh.row=9;gh.col=9+i;gh.dir=([[0,1],[0,-1],[1,0],[-1,0]][i]) as [number,number];gh.mode='scatter';
+          const bc=(gh.mesh as GhostMeshEx)._baseColor;
+          grp2.traverse(child=>{ if((child as THREE.Mesh).isMesh){ const m=(child as THREE.Mesh).material as THREE.MeshStandardMaterial; m.color.setHex(bc); m.emissive.setHex(bc); m.emissiveIntensity=0.6; m.transparent=false; m.opacity=1; }});
+        });
         g.frightened=false;g.frightenTimer=0;updateHUD();
       }
 
