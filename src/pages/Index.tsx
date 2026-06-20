@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Icon from '@/components/ui/icon';
 import { Button } from '@/components/ui/button';
 
@@ -16,6 +17,7 @@ const products = [
 
 const Index = () => {
   const [menuOpen, setMenuOpen] = useState(false);
+  const navigate = useNavigate();
 
   const scrollTo = (id: string) => {
     setMenuOpen(false);
@@ -34,6 +36,10 @@ const Index = () => {
             <button onClick={() => scrollTo('top')} className="hover:text-primary transition-colors">Главная</button>
             <button onClick={() => scrollTo('catalog')} className="hover:text-primary transition-colors">Каталог</button>
             <button onClick={() => scrollTo('charity')} className="hover:text-primary transition-colors">Благотворительность</button>
+            <button onClick={() => navigate('/game')} className="flex items-center gap-2 text-yellow-400 hover:text-yellow-300 transition-colors border border-yellow-600/50 px-4 py-1.5 rounded-sm hover:bg-yellow-400/10">
+              <Icon name="Gamepad2" size={16} />
+              Игра
+            </button>
           </nav>
           <button className="md:hidden text-primary" onClick={() => setMenuOpen(!menuOpen)}>
             <Icon name={menuOpen ? 'X' : 'Menu'} size={28} />
